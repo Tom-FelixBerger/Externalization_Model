@@ -11,7 +11,7 @@ MODEL_PARAMS = {
     'learning_steps': 15,           # number of learning steps
     'game_rounds': 15,              # number of game rounds
     'initial_externalizers': 0.01,  # initial share of externalizers
-    'generations': 3                # number of generations
+    'generations': 100              # number of generations
 }
 
 BEHAVIORS = {
@@ -178,10 +178,10 @@ def update_behavior(simulation_df, generation, learning_step):
                     simulation_df.loc[pd.IndexSlice[generation, learning_step, :, "payoffs"], (ext_type, behavior, "unmatched")].values*
                     simulation_df.loc[pd.IndexSlice[generation, learning_step, :, "shares"], (ext_type, behavior, "unmatched")].values
                 )
-            )/shares[(ext_type, behavior)]
+            )/shares[(ext_type, behavior)] if shares[(ext_type, behavior)] > 0 else 0
         total_share = sum(shares[(ext_type, behavior)] for behavior in BEHAVIORS[ext_type])
         aggregated_payoffs[(ext_type, "mean")] = sum([aggregated_payoffs[(ext_type, behavior)]*shares[(ext_type, behavior)]
-                                                      for behavior in BEHAVIORS[ext_type]])/total_share
+                                                      for behavior in BEHAVIORS[ext_type]])/total_share if total_share > 0 else 0
 
     # update behavior success-based
     for ext_type in ["externalizing", "non-externalizing"]:
@@ -190,7 +190,7 @@ def update_behavior(simulation_df, generation, learning_step):
             new_share =  shares[(ext_type, behavior)] * (1 +
                 (aggregated_payoffs[(ext_type, behavior)]-aggregated_payoffs[(ext_type, "mean")]) /
                 aggregated_payoffs[(ext_type, "mean")]
-            )
+            ) if aggregated_payoffs[(ext_type, "mean")] > 0 else 0
             simulation_df.loc[idx_next, (ext_type, behavior, "unmatched")] = new_share
     
     normalize_shares(simulation_df, generation, learning_step+1, 0)
@@ -212,13 +212,13 @@ def update_externalization(simulation_df, generation):
             ) + sum(
                 simulation_df.loc[pd.IndexSlice[generation, :, :, "payoffs"], (ext_type, behavior, "unmatched")].values *
                 simulation_df.loc[pd.IndexSlice[generation, :, :, "shares"], (ext_type, behavior, "unmatched")].values
-            ))/shares[ext_type]
+            ))/shares[ext_type] if shares[ext_type] > 0 else 0
     aggregated_payoffs["mean"] = aggregated_payoffs["externalizing"]*shares["externalizing"] + aggregated_payoffs["non-externalizing"]*shares["non-externalizing"]
 
     # update externalization trait
     for ext_type in ["externalizing", "non-externalizing"]:
         old_share = simulation_df.loc[idx, pd.IndexSlice[ext_type, :, :]].sum()
-        new_share = old_share * (1 + aggregated_payoffs[ext_type] - aggregated_payoffs["mean"]) / aggregated_payoffs["mean"]
+        new_share = old_share * (1 + MODEL_PARAMS["replication_k"]*(aggregated_payoffs[ext_type] - aggregated_payoffs["mean"]) / aggregated_payoffs["mean"])
         for behavior in BEHAVIORS[ext_type]:
             simulation_df.loc[idx_next, (ext_type, behavior, "unmatched")] = new_share / len(BEHAVIORS[ext_type])
             simulation_df.loc[idx_next, (ext_type, behavior, "matched")] = 0
@@ -231,6 +231,7 @@ def run_simulation():
 
     # natural selection
     for generation in range(MODEL_PARAMS['generations']):
+        print(str(generation)+" of "+str(MODEL_PARAMS['generations']))
         # learning process
         for learning_step in range(MODEL_PARAMS['learning_steps']):
 
@@ -245,11 +246,9 @@ def run_simulation():
 
         # reproduction, that is update of externalization trait
         update_externalization(simulation_df, generation)
-    
     return simulation_df
 
 if __name__ == "__main__":
     simulation_df = run_simulation()
     file_dir = os.path.dirname(os.path.realpath(__file__))
-    simulation_df.to_csv(file_dir + "/../data/base_model_simulation.csv", index=False)
-
+    simulation_df.to_csv(file_dir + "/../data/base_model_simulation.csv")
