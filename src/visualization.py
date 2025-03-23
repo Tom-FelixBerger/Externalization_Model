@@ -2,98 +2,76 @@
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
+import os
 from model import initialize_dataframe
 
 
-csv_file = "../data/base_model_simulation.csv"
-# def visualize_interaction_process(csv_file, generation=1, learning_step=1):
-# Read the CSV file
-print(f"Reading data from {csv_file}...")
-df = pd.read_csv(csv_file)
 
-# Convert the flat column format back to multi-index
-df.columns = initialize_dataframe().columns
-df
-    
-# Convert index columns to numeric types
-df[("generation", "", "", "")] = pd.to_numeric(df[("generation", "", "", "")])
-df[("learning_step", "", "", "")] = pd.to_numeric(df[("learning_step", "", "", "")])
-df[("game_round", "", "", "")] = pd.to_numeric(df[("game_round", "", "", "")])
+def visualize_interaction_process(csv_file, generation=0, learning_step=0):
+    # Read the CSV file
+    df = pd.read_csv(csv_file, dtype=str)
 
-# Make sure all data columns are numeric as well
-for col in df.columns:
-    if col[2] in ["matched", "unmatched"] and col[3] in ["share", "payoff"]:
-        df[col] = pd.to_numeric(df[col], errors='coerce')
+    # Reconstruct index and column index
+    df = df.loc[3:len(df)]
+    index_colnames = ["generation", "learning_step", "game_round", "metric"]
+    df.rename(columns=dict(zip(df.columns[:4], index_colnames)), inplace=True)
+    for col in df.columns:
+        if col != "metric":
+            df[col] = pd.to_numeric(df[col])
+    df.set_index(index_colnames, inplace=True)
+    df.columns = initialize_dataframe().columns
 
-# Filter data for the specified generation and learning step
-filtered_df = df[(df[("generation", "", "", "")] == generation) & 
-                    (df[("learning_step", "", "", "")] == learning_step)]
+    # Filter data for the specified generation and learning step
+    filtered_df = df.loc[pd.IndexSlice[generation, learning_step, :, :], :]
+    filtered_df.index = filtered_df.index.remove_unused_levels()
+    game_rounds = sorted(filtered_df.index.levels[2])
 
-if filtered_df.empty:
-    print(f"No data found for generation {generation}, learning step {learning_step}")
-    return
+    # Define strategy names for easier reference
+    strategies = [
+        ("externalizing", "alpha"),
+        ("externalizing", "delta"),
+        ("non-externalizing", "alpha"),
+        ("non-externalizing", "beta"),
+        ("non-externalizing", "gamma"),
+        ("non-externalizing", "delta")
+    ]
 
-print(f"Visualizing interaction process for generation {generation}, learning step {learning_step}...")
+    # Set up a consistent color palette for strategies
+    strategy_colors = ["green", "orange", "green", "red", "blue", "orange"]
+    strategy_grid_place = [4, 7, 0, 1, 2, 3]
 
-# Get the game rounds
-game_rounds = sorted(filtered_df[("game_round", "", "", "")].unique())
+    # Set the style for the plots
+    sns.set_style("whitegrid")
 
-# Define strategy names for easier reference
-strategies = [
-    ("externalizing", "alpha"),
-    ("externalizing", "delta"),
-    ("non-externalizing", "alpha"),
-    ("non-externalizing", "beta"),
-    ("non-externalizing", "gamma"),
-    ("non-externalizing", "delta")
-]
+    # Create figure 1: Matched share over game rounds
+    fig1, axes1 = plt.subplots(2, 4, figsize=(15, 10))
+    fig1.suptitle(f'Development of Matched Share - Generation {generation}, Learning Step {learning_step}', 
+                    fontsize=16)
+    axes1 = axes1.flatten()
 
-strategy_labels = [
-    "Ext-Alpha",
-    "Ext-Delta",
-    "Non-Ext-Alpha",
-    "Non-Ext-Beta",
-    "Non-Ext-Gamma",
-    "Non-Ext-Delta"
-]
+    # Create figure 2: Payoffs over game rounds
+    fig2, axes2 = plt.subplots(2, 4, figsize=(15, 10))
+    fig2.suptitle(f'Development of Payoffs - Generation {generation}, Learning Step {learning_step}', 
+                    fontsize=16)
+    axes2 = axes2.flatten()
 
-# Set up a consistent color palette for strategies
-strategy_colors = sns.color_palette("husl", len(strategies))
-
-# Set the style for the plots
-sns.set_style("whitegrid")
-
-# Create figure 1: Matched share over game rounds
-fig1, axes1 = plt.subplots(2, 3, figsize=(15, 10))
-fig1.suptitle(f'Development of Matched Share - Generation {generation}, Learning Step {learning_step}', 
-                fontsize=16)
-axes1 = axes1.flatten()
-
-# Create figure 2: Payoffs over game rounds
-fig2, axes2 = plt.subplots(2, 3, figsize=(15, 10))
-fig2.suptitle(f'Development of Payoffs - Generation {generation}, Learning Step {learning_step}', 
-                fontsize=16)
-axes2 = axes2.flatten()
-
-# Plot data for each strategy
-for i, (strategy, label, color) in enumerate(zip(strategies, strategy_labels, strategy_colors)):
-    # Extract data for this strategy
-    matched_shares = []
-    payoffs = []
-    
-    for round_num in game_rounds:
-        # Get data for this round
-        round_data = filtered_df[filtered_df[("game_round", "", "", "")] == round_num]
+    # Plot data for each strategy
+    for (strategy, color, i) in zip(strategies, strategy_colors, strategy_grid_place):
+        # Extract data for this strategy
+        matched_shares = []
+        payoffs = []
         
-        if not round_data.empty:
-            # Extract matched share for this strategy and round
-            matched_share = round_data[(strategy[0], strategy[1], "matched", "share")].values[0]
-            matched_shares.append(matched_share)
+        for round_num in game_rounds:
+            # Get data for this round
+            shares_data = filtered_df.loc[pd.IndexSlice[:, :, round_num, "shares"]]
+            payoffs_data = filtered_df.loc[pd.IndexSlice[:, :, round_num, "payoffs"]]
             
-            # Extract payoff data
-            matched_payoff = round_data[(strategy[0], strategy[1], "matched", "payoff")].values[0]
-            unmatched_share = round_data[(strategy[0], strategy[1], "unmatched", "share")].values[0]
-            unmatched_payoff = round_data[(strategy[0], strategy[1], "unmatched", "payoff")].values[0]
+            matched_share = shares_data[(strategy[0], strategy[1], "matched")].values[0]
+            matched_shares.append(matched_share)
+            matched_payoff = payoffs_data[(strategy[0], strategy[1], "matched")].values[0]
+            
+            unmatched_share = shares_data[(strategy[0], strategy[1], "unmatched")].values[0]
+            unmatched_payoff = payoffs_data[(strategy[0], strategy[1], "unmatched")].values[0]
             
             # Calculate weighted average payoff
             total_share = matched_share + unmatched_share
@@ -103,29 +81,32 @@ for i, (strategy, label, color) in enumerate(zip(strategies, strategy_labels, st
                 avg_payoff = 0
             
             payoffs.append(avg_payoff)
-    
-    # Plot matched share
-    axes1[i].plot(game_rounds, matched_shares, 'o-', color=color, label=label)
-    axes1[i].set_title(f"{label}")
-    axes1[i].set_xlabel("Game Round")
-    axes1[i].set_ylabel("Matched Share")
-    if matched_shares:  # Check if list is not empty
-        max_value = max(matched_shares)
-        axes1[i].set_ylim(0, max(max_value * 1.1, 0.1))  # Set reasonable y-axis limits
-    
-    # Plot payoffs
-    axes2[i].plot(game_rounds, payoffs, 'o-', color=color, label=label)
-    axes2[i].set_title(f"{label}")
-    axes2[i].set_xlabel("Game Round")
-    axes2[i].set_ylabel("Average Payoff")
-    if payoffs and max(payoffs) > 0:  # Check if list is not empty and has positive values
-        axes2[i].set_ylim(0, max(payoffs) * 1.1)  # Set reasonable y-axis limits
-    
-# Adjust layout and show plots
-fig1.tight_layout(rect=[0, 0, 1, 0.95])
-fig2.tight_layout(rect=[0, 0, 1, 0.95])
+        
+        # Plot matched share
+        axes1[i].plot(game_rounds, matched_shares, 'o-', color=color)
+        axes1[i].set_title(f"{strategy}")
+        axes1[i].set_xlabel("Game Round")
+        axes1[i].set_ylabel("Matched Share")
 
-plt.show()
+        # Plot payoffs
+        axes2[i].plot(game_rounds, payoffs, 'o-', color=color)
+        axes2[i].set_title(f"{strategy}")
+        axes2[i].set_xlabel("Game Round")
+        axes2[i].set_ylabel("Payoff")
+        axes2[i].set_ylim(-0.1, 3.1)
+        
+    # Adjust layout and show plots
+    fig1.tight_layout(rect=[0, 0, 1, 0.95])
+    fig2.tight_layout(rect=[0, 0, 1, 0.95])
 
-# if __name__ == "__main__":
-#     visualize_interaction_process("../data/base_model_simulation.csv")
+    return fig1, fig2
+
+if __name__ == "__main__":
+    file_dir = os.path.dirname(os.path.realpath(__file__))
+    fig1, fig2 = visualize_interaction_process(
+        file_dir+"/../data/base_model_simulation.csv",
+        generation=0,
+        learning_step=0
+    )
+    fig1.savefig(file_dir+"/../plots/interaction_process_matched_gen0_lst0.png")
+    fig2.savefig(file_dir+"/../plots/interaction_process_payoffs_gen0_lst0.png")
