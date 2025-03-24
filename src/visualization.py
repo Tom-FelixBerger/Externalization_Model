@@ -231,7 +231,7 @@ def visualize_natural_selection_process():
     ext_traits = ["externalizing", "non-externalizing"]
 
     for ext in ext_traits:
-        for generation in range(100):
+        for generation in range(30):
             share = df.loc[(generation, 0, 0, "shares"), pd.IndexSlice[ext, :, :]].sum()
             visualization_df.loc[len(visualization_df)] = [generation, ext.replace("ing", "ers"), share]
 
@@ -241,7 +241,7 @@ def visualize_natural_selection_process():
     sns.lineplot(data=visualization_df, x="generation", y="share", hue="ext_trait", 
                         marker='o', palette=COLOR_DICT, markeredgewidth=0, ax=ax)  # Pass ax to seaborn
 
-    ax.set_xlabel("Learning Step")  # Set labels on the axes, not on the figure
+    ax.set_xlabel("Generation")  # Set labels on the axes, not on the figure
     ax.set_ylabel("Share of Population")
     ax.legend(title=None)  # Remove legend title
 

@@ -11,7 +11,7 @@ MODEL_PARAMS = {
     'learning_steps': 15,           # number of learning steps
     'game_rounds': 15,              # number of game rounds
     'initial_externalizers': 0.01,  # initial share of externalizers
-    'generations': 100              # number of generations
+    'generations': 30               # number of generations
 }
 
 BEHAVIORS = {
@@ -108,11 +108,12 @@ def update_matched(simulation_df, generation, learning_step, game_round):
 
     # Calculate probabilities among unmatched
     sum_unmatched = sum(simulation_df.loc[idx, [
-        ("externalizing", "alpha", "unmatched"),
-        ("non-externalizing", "alpha", "unmatched"),
-        ("non-externalizing", "beta", "unmatched"),
-        ("non-externalizing", "gamma", "unmatched"),
-        ("non-externalizing", "delta", "unmatched")
+        ("externalizing", "alpha",   "unmatched"),
+        ("externalizing", "delta",   "unmatched"),
+        ("non-externalizing", "alpha",   "unmatched"),
+        ("non-externalizing", "beta",    "unmatched"),
+        ("non-externalizing", "gamma",   "unmatched"),
+        ("non-externalizing", "delta",   "unmatched")
     ]])
     if sum_unmatched > 0:
         prob = {
@@ -218,7 +219,9 @@ def update_externalization(simulation_df, generation):
     # update externalization trait
     for ext_type in ["externalizing", "non-externalizing"]:
         old_share = simulation_df.loc[idx, pd.IndexSlice[ext_type, :, :]].sum()
-        new_share = old_share * (1 + MODEL_PARAMS["replication_k"]*(aggregated_payoffs[ext_type] - aggregated_payoffs["mean"]) / aggregated_payoffs["mean"])
+        new_share = old_share + old_share*MODEL_PARAMS["replication_k"]*(aggregated_payoffs[ext_type] - aggregated_payoffs["mean"]) / aggregated_payoffs["mean"]
+        dummy=1
+        pass
         for behavior in BEHAVIORS[ext_type]:
             simulation_df.loc[idx_next, (ext_type, behavior, "unmatched")] = new_share / len(BEHAVIORS[ext_type])
             simulation_df.loc[idx_next, (ext_type, behavior, "matched")] = 0
