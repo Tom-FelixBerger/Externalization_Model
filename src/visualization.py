@@ -102,4 +102,4 @@ if __name__ == "__main__":
         generation=0,
         learning_step=0
     )
-    fig.savefig(file_dir+"/../plots/interaction_process_matched_gen0_lst0.png")
+    fig.savefig(file_dir+"/../plots/interaction_process_gen0_lst0.png")
