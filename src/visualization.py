@@ -216,23 +216,52 @@ def visualize_learning_process(generation=0):
         handles=[h[0] for h in handles], 
         labels=[h[1] for h in handles],
         ncol=5,
-        bbox_to_anchor=(0.8, 0.075)
+        bbox_to_anchor=(0.8, 0.125)
     )
 
     fig.tight_layout(pad=3.0)
+    plt.subplots_adjust(bottom=0.2)
 
     return fig
+
+def visualize_natural_selection_process():
+    df = read_data()
+
+    visualization_df = pd.DataFrame(columns=["generation", "ext_trait", "share"])
+    ext_traits = ["externalizing", "non-externalizing"]
+
+    for ext in ext_traits:
+        for generation in range(100):
+            share = df.loc[(generation, 0, 0, "shares"), pd.IndexSlice[ext, :, :]].sum()
+            visualization_df.loc[len(visualization_df)] = [generation, ext.replace("ing", "ers"), share]
+
+    sns.set_style("whitegrid")
+    
+    fig, ax = plt.subplots()  # Create a figure and an axes object
+    sns.lineplot(data=visualization_df, x="generation", y="share", hue="ext_trait", 
+                        marker='o', palette=COLOR_DICT, markeredgewidth=0, ax=ax)  # Pass ax to seaborn
+
+    ax.set_xlabel("Learning Step")  # Set labels on the axes, not on the figure
+    ax.set_ylabel("Share of Population")
+    ax.legend(title=None)  # Remove legend title
+
+
+    return fig
+
 
 if __name__ == "__main__":
     file_dir = os.path.dirname(os.path.realpath(__file__))
 
-    fig = visualize_interaction_process(
+    fig1 = visualize_interaction_process(
         generation=0,
         learning_step=0
     )
-    fig.savefig(file_dir+"/../plots/fig1.png")
+    fig1.savefig(file_dir+"/../plots/fig1.png")
 
-    fig = visualize_learning_process(
+    fig2 = visualize_learning_process(
         generation=0
     )
-    fig.savefig(file_dir+"/../plots/fig2.png")
+    fig2.savefig(file_dir+"/../plots/fig2.png")
+
+    fig3 = visualize_natural_selection_process()
+    fig3.savefig(file_dir+"/../plots/fig3.png")
