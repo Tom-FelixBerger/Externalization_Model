@@ -5,10 +5,10 @@ import matplotlib.pyplot as plt
 import os
 from model import initialize_dataframe
 
-
-
-def visualize_interaction_process(csv_file, generation=0, learning_step=0):
-    # Read the CSV file
+def read_data():
+    # Read the file
+    file_dir = os.path.dirname(os.path.realpath(__file__))
+    csv_file = file_dir+"/../data/base_model_simulation.csv"
     df = pd.read_csv(csv_file, dtype=str)
 
     # Reconstruct index and column index
@@ -21,92 +21,85 @@ def visualize_interaction_process(csv_file, generation=0, learning_step=0):
     df.set_index(index_colnames, inplace=True)
     df.columns = initialize_dataframe().columns
 
-    # Filter data for the specified generation and learning step
-    filtered_df = df.loc[pd.IndexSlice[generation, learning_step, :, :], :]
-    filtered_df.index = filtered_df.index.remove_unused_levels()
-    game_rounds = sorted(filtered_df.index.levels[2])
+    return df
 
-    # Define strategy names for easier reference
-    strategies = [
-        ("externalizing", "alpha"),
-        ("externalizing", "delta"),
-        ("non-externalizing", "alpha"),
-        ("non-externalizing", "beta"),
-        ("non-externalizing", "gamma"),
-        ("non-externalizing", "delta")
-    ]
-
-    # Set up a consistent color palette for strategies
-    strategy_colors = ["green", "orange", "green", "red", "blue", "orange"]
-    strategy_grid_place = [4, 7, 0, 1, 2, 3]
-
-    # Set the style for the plots
-    sns.set_style("whitegrid")
-
-    # Create figure 1: Matched share over game rounds
-    fig1, axes1 = plt.subplots(2, 4, figsize=(15, 10))
-    fig1.suptitle(f'Development of Matched Share - Generation {generation}, Learning Step {learning_step}', 
-                    fontsize=16)
-    axes1 = axes1.flatten()
-
-    # Create figure 2: Payoffs over game rounds
-    fig2, axes2 = plt.subplots(2, 4, figsize=(15, 10))
-    fig2.suptitle(f'Development of Payoffs - Generation {generation}, Learning Step {learning_step}', 
-                    fontsize=16)
-    axes2 = axes2.flatten()
-
-    # Plot data for each strategy
-    for (strategy, color, i) in zip(strategies, strategy_colors, strategy_grid_place):
-        # Extract data for this strategy
-        matched_shares = []
-        payoffs = []
-        
-        for round_num in game_rounds:
-            # Get data for this round
-            shares_data = filtered_df.loc[pd.IndexSlice[:, :, round_num, "shares"]]
-            payoffs_data = filtered_df.loc[pd.IndexSlice[:, :, round_num, "payoffs"]]
-            
-            matched_share = shares_data[(strategy[0], strategy[1], "matched")].values[0]
-            matched_shares.append(matched_share)
-            matched_payoff = payoffs_data[(strategy[0], strategy[1], "matched")].values[0]
-            
-            unmatched_share = shares_data[(strategy[0], strategy[1], "unmatched")].values[0]
-            unmatched_payoff = payoffs_data[(strategy[0], strategy[1], "unmatched")].values[0]
-            
-            # Calculate weighted average payoff
-            total_share = matched_share + unmatched_share
-            if total_share > 0:
-                avg_payoff = (matched_share * matched_payoff + unmatched_share * unmatched_payoff) / total_share
+def visualize_interaction_process(generation=0, learning_step=0):
+    df = read_data()
+    visualization_df = pd.DataFrame(columns=["game_round", "behavior", "matched_share", "payoff", "accumulated_payoff"])
+    behaviors = ["alpha", "delta", "beta", "gamma"]
+    visibility_offset = {"alpha": 0.008, "beta": 0, "gamma": -0.004, "delta": 0.004}
+    for behavior in behaviors:
+        total = df.loc[(generation, learning_step, 0, "shares"), pd.IndexSlice[:, behavior, :]].sum()
+        accumulated_payoff = 0
+        for game_round in range(15):
+            if total > 0:
+                matched_share = df.loc[(generation, learning_step, game_round, "shares"),
+                                   pd.IndexSlice[:, behavior, "matched"]].sum()/total + visibility_offset[behavior]
+                payoff_matched = df.loc[(generation, learning_step, game_round, "payoffs"),
+                                 pd.IndexSlice["non-externalizing", behavior, "matched"]]
+                payoff_unmatched = df.loc[(generation, learning_step, game_round, "payoffs"),
+                                 pd.IndexSlice["non-externalizing", behavior, "unmatched"]]
+                payoff = matched_share * payoff_matched + (1-matched_share) * payoff_unmatched
+                accumulated_payoff += payoff
             else:
-                avg_payoff = 0
-            
-            payoffs.append(avg_payoff)
-        
-        # Plot matched share
-        axes1[i].plot(game_rounds, matched_shares, 'o-', color=color)
-        axes1[i].set_title(f"{strategy}")
-        axes1[i].set_xlabel("Game Round")
-        axes1[i].set_ylabel("Matched Share")
+                print(behavior, game_round)
+                payoff = 0
+                matched_share = 0
+            visualization_df.loc[len(visualization_df)] = [
+                game_round, behavior, matched_share, payoff, accumulated_payoff
+            ]
 
-        # Plot payoffs
-        axes2[i].plot(game_rounds, payoffs, 'o-', color=color)
-        axes2[i].set_title(f"{strategy}")
-        axes2[i].set_xlabel("Game Round")
-        axes2[i].set_ylabel("Payoff")
-        axes2[i].set_ylim(-0.1, 3.1)
-        
-    # Adjust layout and show plots
-    fig1.tight_layout(rect=[0, 0, 1, 0.95])
-    fig2.tight_layout(rect=[0, 0, 1, 0.95])
+    sns.set_style("whitegrid")
+    
+    fig, axes = plt.subplots(2, 2, figsize=(10, 10))
+    fig.suptitle(f'Development of Matched Share and Payoffs - Generation {generation}, Learning Step {learning_step}',
+                fontsize=16)
+    axes = axes.flatten()
 
-    return fig1, fig2
+    axes[0].set_title("Matched Share")
+    axes[1].set_title("Payoff by Round")
+    axes[2].set_title("Accumulated Payoff")
+
+    # Method 1: Define a custom color palette with a dictionary
+    # Replace these with your actual behavior names and desired colors
+    color_dict = {
+        "alpha": "green",
+        "beta": "red", 
+        "gamma": "dodgerblue",
+        "delta": "orange"
+    }
+
+    # Create the plots using the custom palette
+    line1 = sns.lineplot(data=visualization_df, x="game_round", y="matched_share", hue="behavior", 
+                        marker='o', ax=axes[0], palette=color_dict, markeredgewidth=0)
+    line2 = sns.lineplot(data=visualization_df, x="game_round", y="payoff", hue="behavior", 
+                        marker='o', ax=axes[1], palette=color_dict, markeredgewidth=0)
+    line3 = sns.lineplot(data=visualization_df, x="game_round", y="accumulated_payoff", hue="behavior", 
+                        marker='o', ax=axes[2], palette=color_dict, markeredgewidth=0)
+
+    # Remove the legends from the first three subplots
+    axes[0].get_legend().remove()
+    axes[1].get_legend().remove()
+    axes[2].get_legend().remove()
+
+    # Turn off all spines, ticks, and labels for the fourth subplot
+    axes[3].set_xticks([])
+    axes[3].set_yticks([])
+    for spine in axes[3].spines.values():
+        spine.set_visible(False)
+
+    # Extract the handles and labels from one of the plots
+    handles, labels = line1.get_legend_handles_labels()
+
+    # Create a legend in the empty fourth subplot
+    axes[3].legend(handles, labels, title="Behavior", loc='upper left', fontsize=12)
+
+    return fig
 
 if __name__ == "__main__":
     file_dir = os.path.dirname(os.path.realpath(__file__))
-    fig1, fig2 = visualize_interaction_process(
-        file_dir+"/../data/base_model_simulation.csv",
+    fig = visualize_interaction_process(
         generation=0,
         learning_step=0
     )
-    fig1.savefig(file_dir+"/../plots/interaction_process_matched_gen0_lst0.png")
-    fig2.savefig(file_dir+"/../plots/interaction_process_payoffs_gen0_lst0.png")
+    fig.savefig(file_dir+"/../plots/interaction_process_matched_gen0_lst0.png")
