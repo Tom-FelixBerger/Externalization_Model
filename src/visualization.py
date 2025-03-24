@@ -2,8 +2,28 @@
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
+from matplotlib.patches import Patch
+from matplotlib.lines import Line2D
 import os
 from model import initialize_dataframe
+
+plt.rcParams.update({
+    'font.size': 16,  # Base font size
+    'axes.titlesize': 16,  # Title font size
+    'axes.labelsize': 16,  # Axis label font size
+    'xtick.labelsize': 16,  # X tick label font size
+    'ytick.labelsize': 16,  # Y tick label font size
+    'legend.fontsize': 16,  # Legend font size
+})
+
+COLOR_DICT = {
+    "alpha": "green",
+    "beta": "red", 
+    "gamma": "dodgerblue",
+    "delta": "orange",
+    "externalizers": "darkblue",
+    "non-externalizers": "purple"
+}
 
 def read_data():
     # Read the file
@@ -51,55 +71,168 @@ def visualize_interaction_process(generation=0, learning_step=0):
 
     sns.set_style("whitegrid")
     
-    fig, axes = plt.subplots(2, 2, figsize=(10, 10))
-    fig.suptitle(f'Development of Matched Share and Payoffs - Generation {generation}, Learning Step {learning_step}',
-                fontsize=16)
+    fig, axes = plt.subplots(1, 3, figsize=(12, 5))
     axes = axes.flatten()
 
-    axes[0].set_title("Matched Share")
-    axes[1].set_title("Payoff by Round")
-    axes[2].set_title("Accumulated Payoff")
-
-    # Method 1: Define a custom color palette with a dictionary
-    # Replace these with your actual behavior names and desired colors
-    color_dict = {
-        "alpha": "green",
-        "beta": "red", 
-        "gamma": "dodgerblue",
-        "delta": "orange"
-    }
+    axes[0].set_ylabel("Matched Share")
+    axes[0].set_xlabel("Game Round")
+    axes[1].set_ylabel("Payoff by Round")
+    axes[1].set_xlabel("Game Round")
+    axes[2].set_ylabel("Accumulated Payoff")
+    axes[2].set_xlabel("Game Round")
 
     # Create the plots using the custom palette
     line1 = sns.lineplot(data=visualization_df, x="game_round", y="matched_share", hue="behavior", 
-                        marker='o', ax=axes[0], palette=color_dict, markeredgewidth=0)
+                        marker='o', ax=axes[0], palette=COLOR_DICT, markeredgewidth=0)
     line2 = sns.lineplot(data=visualization_df, x="game_round", y="payoff", hue="behavior", 
-                        marker='o', ax=axes[1], palette=color_dict, markeredgewidth=0)
+                        marker='o', ax=axes[1], palette=COLOR_DICT, markeredgewidth=0)
     line3 = sns.lineplot(data=visualization_df, x="game_round", y="accumulated_payoff", hue="behavior", 
-                        marker='o', ax=axes[2], palette=color_dict, markeredgewidth=0)
+                        marker='o', ax=axes[2], palette=COLOR_DICT, markeredgewidth=0)
 
-    # Remove the legends from the first three subplots
+    # After creating all three subplots
+    handles, labels = axes[0].get_legend_handles_labels()  # Get the legend handles and labels from any of the axes
+    fig.legend(handles, labels, loc='lower left', bbox_to_anchor=(0.03, 0.0), ncol=2)
+
+    # Remove the individual legends as you're already doing
     axes[0].get_legend().remove()
     axes[1].get_legend().remove()
     axes[2].get_legend().remove()
 
-    # Turn off all spines, ticks, and labels for the fourth subplot
-    axes[3].set_xticks([])
-    axes[3].set_yticks([])
-    for spine in axes[3].spines.values():
-        spine.set_visible(False)
+    # Adjust the figure layout to make room for the legend at the bottom
+    fig.tight_layout(pad=3.0)
+    plt.subplots_adjust(bottom=0.3)  # Add space at the bottom for the legend
 
-    # Extract the handles and labels from one of the plots
-    handles, labels = line1.get_legend_handles_labels()
+    return fig
 
-    # Create a legend in the empty fourth subplot
-    axes[3].legend(handles, labels, title="Behavior", loc='upper left', fontsize=12)
+def visualize_learning_process(generation=0):
+    df = read_data()
+
+    payoff_ext_df = pd.DataFrame(columns=["learning_step", "ext_trait", "payoff_accumulated"])
+    payoff_ext_df = payoff_ext_df.set_index(["learning_step","ext_trait"])
+    for ext_trait in ["externalizers", "non-externalizers"]:
+        for learning_step in range(15):
+            payoff_ext_df.loc[(learning_step, ext_trait), "payoff_accumulated"] = 0
+    
+    visualization_df = pd.DataFrame(columns=["learning_step", "behavior", "share", "share_among_ext", "share_among_non_ext", "end_of_step_matched", "end_of_step_payoff"])
+    behaviors = ["alpha", "beta", "gamma", "delta"]
+
+    for behavior in behaviors:
+        for learning_step in range(15):
+            total_ext = df.loc[(generation, learning_step, 0, "shares"), pd.IndexSlice["externalizing", :, :]].sum()
+            total_non_ext = df.loc[(generation, learning_step, 0, "shares"), pd.IndexSlice["non-externalizing", :, :]].sum()
+            share = df.loc[(generation, learning_step, 14, "shares"),
+                                pd.IndexSlice[:, behavior, :]].sum()
+            share_among_ext = df.loc[
+                        (generation, learning_step, 14, "shares"),
+                        pd.IndexSlice["externalizing", behavior, :]
+                    ].sum()/total_ext if behavior in ["alpha", "delta"] else 0
+            share_among_non_ext = df.loc[(generation, learning_step, 14, "shares"),
+                                pd.IndexSlice["non-externalizing", behavior, :]].sum()/total_non_ext
+            end_of_step_matched = (
+                df.loc[(generation, learning_step, 14, "shares"),
+                pd.IndexSlice["non-externalizing", behavior, "matched"]]/
+                df.loc[(generation, learning_step, 14, "shares"),
+                pd.IndexSlice["non-externalizing", behavior, :]].sum()
+            )
+            end_of_step_payoff = (
+                df.loc[
+                    pd.IndexSlice[generation, learning_step, :, "payoffs"],
+                    pd.IndexSlice["non-externalizing", behavior, "matched"]
+                ].values * df.loc[
+                    pd.IndexSlice[generation, learning_step, :, "shares"],
+                    pd.IndexSlice["non-externalizing", behavior, "matched"]
+                ].values + df.loc[
+                    pd.IndexSlice[generation, learning_step, :, "payoffs"],
+                    pd.IndexSlice["non-externalizing", behavior, "unmatched"]
+                ].values * df.loc[
+                    pd.IndexSlice[generation, learning_step, :, "shares"],
+                    pd.IndexSlice["non-externalizing", behavior, "unmatched"]
+                ].values
+            ).sum()/df.loc[(generation, learning_step, 14, "shares"),
+                                pd.IndexSlice["non-externalizing", behavior, :]].sum()
+            payoff_ext_df.loc[(learning_step, "externalizers")] += end_of_step_payoff*share_among_ext
+            payoff_ext_df.loc[(learning_step, "non-externalizers")] += end_of_step_payoff*share_among_non_ext
+
+            visualization_df.loc[len(visualization_df)] = [
+                learning_step, behavior, share, share_among_ext, share_among_non_ext, end_of_step_matched, end_of_step_payoff
+            ]
+    
+
+    sns.set_style("whitegrid")
+    
+    fig, axes = plt.subplots(2, 3, figsize=(12, 9))
+    axes = axes.flatten()
+
+    sns.lineplot(data=visualization_df, x="learning_step", y="share", hue="behavior", 
+                        marker='o', ax=axes[0], palette=COLOR_DICT, markeredgewidth=0)
+    sns.lineplot(data=visualization_df, x="learning_step", y="end_of_step_matched", hue="behavior",
+                        marker='o', ax=axes[1], palette=COLOR_DICT, markeredgewidth=0)
+    sns.lineplot(data=visualization_df, x="learning_step", y="end_of_step_payoff", hue="behavior",
+                        marker='o', ax=axes[2], palette=COLOR_DICT, markeredgewidth=0)
+    
+    # Convert to wide format for stacked plots and reindex to match original behavior order
+    pivot_share_ext = visualization_df.pivot(index='learning_step', columns='behavior', values='share_among_ext')[behaviors]
+    pivot_share_non_ext = visualization_df.pivot(index='learning_step', columns='behavior', values='share_among_non_ext')[behaviors]
+
+    # Create stacked area plots for the first three charts
+    pivot_share_ext.plot.area(ax=axes[3], stacked=True, color=[COLOR_DICT[b] for b in behaviors], alpha=0.7)
+    pivot_share_non_ext.plot.area(ax=axes[4], stacked=True, color=[COLOR_DICT[b] for b in behaviors], alpha=0.7)
+    
+    payoff_ext_df = payoff_ext_df.reset_index()
+    sns.lineplot(data=payoff_ext_df, x="learning_step", y="payoff_accumulated", hue="ext_trait",
+                 marker="o", ax=axes[5], palette=COLOR_DICT, markeredgewidth=0)
+
+    for ax in axes:
+        ax.set_xlabel("Learning Step")
+    axes[0].set_ylabel("Share of Population")
+    axes[1].set_ylabel("End of Step Matched Share")
+    axes[2].set_ylabel("Accumulated Payoff Step")
+    axes[3].set_ylabel("Share among Externalizers")
+    axes[4].set_ylabel("Share among Non-Externalizers")
+    axes[5].set_ylabel("Accumulated Payoff Learning Process")
+
+    # Remove legends from individual plots
+    for ax in axes:
+        if hasattr(ax, 'get_legend') and ax.get_legend() is not None:
+            ax.get_legend().remove()
+
+    # Create custom legend elements
+    handles = []
+    for behavior in behaviors:
+        # Line marker for line plots
+        line = Line2D([0], [0], color=COLOR_DICT[behavior], marker='o', linestyle='-', linewidth=2, markersize=6)
+        # Patch for stacked area plots
+        patch = Patch(facecolor=COLOR_DICT[behavior], edgecolor='none', alpha=0.7)
+        
+        handles.append((line, behavior))
+        handles.append((patch, behavior))
+    
+    for ext_trait in ["externalizers", "non-externalizers"]:
+        line = Line2D([0], [0], color=COLOR_DICT[ext_trait], marker='o', linestyle='-', linewidth=2, markersize=6)
+        handles.append((line, ext_trait))
+
+    # Combine them into a single legend
+    fig.legend(
+        handles=[h[0] for h in handles], 
+        labels=[h[1] for h in handles],
+        ncol=5,
+        bbox_to_anchor=(0.8, 0.075)
+    )
+
+    fig.tight_layout(pad=3.0)
 
     return fig
 
 if __name__ == "__main__":
     file_dir = os.path.dirname(os.path.realpath(__file__))
+
     fig = visualize_interaction_process(
         generation=0,
         learning_step=0
     )
-    fig.savefig(file_dir+"/../plots/interaction_process_gen0_lst0.png")
+    fig.savefig(file_dir+"/../plots/fig1.png")
+
+    fig = visualize_learning_process(
+        generation=0
+    )
+    fig.savefig(file_dir+"/../plots/fig2.png")
