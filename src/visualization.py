@@ -25,10 +25,10 @@ COLOR_DICT = {
     "non-externalizers": "purple"
 }
 
-def read_data():
+def read_data(csvpath="/../data/base_model_simulation.csv"):
     # Read the file
     file_dir = os.path.dirname(os.path.realpath(__file__))
-    csv_file = file_dir+"/../data/base_model_simulation.csv"
+    csv_file = file_dir+csvpath
     df = pd.read_csv(csv_file, dtype=str)
 
     # Reconstruct index and column index
@@ -248,6 +248,75 @@ def visualize_natural_selection_process():
 
     return fig
 
+def visualize_robustness(filename):
+    df = read_data(csvpath="/../data/"+filename)
+    
+    max_gen = int(df.reset_index()["generation"].max())
+    natural_selection_df = pd.DataFrame(columns=["generation", "ext_trait", "share"])
+    ext_traits = ["externalizing", "non-externalizing"]
+    for ext in ext_traits:
+        for generation in range(max_gen+1):
+            share = df.loc[(generation, 0, 0, "shares"), pd.IndexSlice[ext, :, :]].sum()
+            natural_selection_df.loc[len(natural_selection_df)] = [generation, ext.replace("ing", "ers"), share]
+
+    max_lst = int(df.reset_index()["learning_step"].max())
+    max_gro = int(df.reset_index()["game_round"].max())
+    learning_process_df = pd.DataFrame(columns=["learning_step", "behavior", "share"])
+    behaviors = ["alpha", "beta", "gamma", "delta"]
+    for behavior in behaviors:
+        for learning_step in range(max_lst+1):
+            share = df.loc[(0, learning_step, max_gro, "shares"),
+                                pd.IndexSlice[:, behavior, :]].sum()
+            learning_process_df.loc[len(learning_process_df)] = [
+                learning_step, behavior, share
+            ]
+
+    sns.set_style("whitegrid")
+    
+    fig, axes = plt.subplots(1, 2, figsize=(8.5, 5))
+    axes = axes.flatten()
+
+    axes[0].set_ylabel("Share")
+    axes[0].set_xlabel("Learning Step of First Generation")
+    axes[1].set_ylabel("Share")
+    axes[1].set_xlabel("Generation")
+
+    sns.lineplot(data=learning_process_df, x="learning_step", y="share", hue="behavior", 
+                        marker='o', palette=COLOR_DICT, markeredgewidth=0, ax=axes[0])
+    sns.lineplot(data=natural_selection_df, x="generation", y="share", hue="ext_trait", 
+                        marker='o', palette=COLOR_DICT, markeredgewidth=0, ax=axes[1])  # Pass ax to seaborn
+
+        # Remove legends from individual plots
+    for ax in axes:
+        if hasattr(ax, 'get_legend') and ax.get_legend() is not None:
+            ax.get_legend().remove()
+
+    # Create custom legend elements
+    handles = []
+    for behavior in behaviors:
+        # Line marker for line plots
+        line = Line2D([0], [0], color=COLOR_DICT[behavior], marker='o', linestyle='-', linewidth=2, markersize=6)
+
+        handles.append((line, behavior))
+    
+    for ext_trait in ["externalizers", "non-externalizers"]:
+        line = Line2D([0], [0], color=COLOR_DICT[ext_trait], marker='o', linestyle='-', linewidth=2, markersize=6)
+        handles.append((line, ext_trait))
+
+    # Combine them into a single legend
+    fig.legend(
+        handles=[h[0] for h in handles], 
+        labels=[h[1] for h in handles],
+        ncol=3,
+        bbox_to_anchor=(0.8, 0.1)
+    )
+
+    fig.tight_layout(pad=3.0)
+    plt.subplots_adjust(bottom=0.2)
+
+    return fig
+
+
 
 if __name__ == "__main__":
     file_dir = os.path.dirname(os.path.realpath(__file__))
@@ -265,3 +334,22 @@ if __name__ == "__main__":
 
     fig3 = visualize_natural_selection_process()
     fig3.savefig(file_dir+"/../plots/fig3.png")
+
+    fig4 = visualize_robustness(filename="stag_hunt_simulation.csv")
+    fig4.savefig(file_dir+"/../plots/fig4.png")
+
+    fig5 = visualize_robustness(filename="hawk_dove_simulation.csv")
+    fig5.savefig(file_dir+"/../plots/fig5.png")
+
+    fig6 = visualize_robustness(filename="lst_2_simulation.csv")
+    fig6.savefig(file_dir+"/../plots/fig6.png")
+
+    fig7 = visualize_robustness(filename="gro_11_simulation.csv")
+    fig7.savefig(file_dir+"/../plots/fig7.png")
+
+    fig8 = visualize_robustness(filename="gro_10_simulation.csv")
+    fig8.savefig(file_dir+"/../plots/fig8.png")
+
+    # fig9 = visualize_robustness(filename="gro_5_simulation.csv")
+    # fig9.savefig(file_dir+"/../plots/fig9.png")
+
