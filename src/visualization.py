@@ -308,11 +308,11 @@ def visualize_robustness(filename):
         handles=[h[0] for h in handles], 
         labels=[h[1] for h in handles],
         ncol=3,
-        bbox_to_anchor=(0.8, 0.1)
+        bbox_to_anchor=(0.8, 0.2)
     )
 
     fig.tight_layout(pad=3.0)
-    plt.subplots_adjust(bottom=0.2)
+    plt.subplots_adjust(bottom=0.3)
 
     return fig
 
