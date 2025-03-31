@@ -6,7 +6,6 @@ from matplotlib.patches import Patch
 from matplotlib.lines import Line2D
 import os
 import model_1
-import model_2
 
 plt.rcParams.update({
     'font.size': 16,  # Base font size
