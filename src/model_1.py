@@ -244,7 +244,6 @@ def run_simulation():
                 update_matched(simulation_df, generation, learning_step, game_round)
             
             # learning of new interaction and partner search behavior
-            ### AT SOME POINT NAN VALUES OCCUR - SET BREAK POINT AND DEBUG UPDATE BEHAVIOR
             update_behavior(simulation_df, generation, learning_step)
 
         # reproduction, that is update of externalization trait

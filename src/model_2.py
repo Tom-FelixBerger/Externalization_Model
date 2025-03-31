@@ -13,7 +13,7 @@ MODEL_PARAMS = {
     'game_rounds': 15,              # number of game rounds
     'pop_size': 100,                # population size
     'initial_externalizers': 1,     # initial share of externalizers
-    'generations': 100              # number of generations
+    'generations': 3              # number of generations
 }
 
 def new_generation(ext, pop_size):
@@ -61,21 +61,24 @@ def find_partner(simulation_df, generation, learning_step, game_round):
     idx = (generation, learning_step, game_round)
     unpartnered = [i for i in range(MODEL_PARAMS['pop_size']) if simulation_df.loc[idx, (i, "current_partner")] == "unpartnered"]
 
-    random_order = shuffle(unpartnered)
-    for pair in range(0, len(random_order), 2):
-        simulation_df.loc[idx, (random_order[pair], "current_partner")] = random_order[pair + 1]
-        simulation_df.loc[idx, (random_order[pair + 1], "current_partner")] = random_order[pair]
+    if unpartnered:
+        shuffle(unpartnered)
+        for pair in range(0, len(unpartnered), 2):
+            simulation_df.loc[idx, (unpartnered[pair], "current_partner")] = unpartnered[pair + 1]
+            simulation_df.loc[idx, (unpartnered[pair + 1], "current_partner")] = unpartnered[pair]
 
 def play_game(simulation_df, generation, learning_step, game_round):
     idx = (generation, learning_step, game_round)
+    next_idx = (generation, learning_step, game_round + 1)
 
     must_still_play = [i for i in range(MODEL_PARAMS['pop_size'])]
     while not must_still_play == []:
-        must_still_play.remove(agent)
-        must_still_play.remove(current_partner)
 
         agent = must_still_play[0]
         current_partner = simulation_df.loc[idx, (agent, "current_partner")]
+        must_still_play.remove(agent)
+        must_still_play.remove(current_partner)
+
         agent_behavior = simulation_df.loc[idx, (agent, "behavior")]
         partner_behavior = simulation_df.loc[idx, (current_partner, "behavior")]
         
@@ -99,14 +102,17 @@ def play_game(simulation_df, generation, learning_step, game_round):
         simulation_df.loc[idx, (current_partner, "payoff_interaction_process")] += partner_payoff
 
         # Determine whether partnership is stable
-        if not (
-            (agent_behavior == "alpha" and partner_behavior == "alpha") or \
-            (agent_behavior == "beta" and partner_behavior == "gamma") or \
-            (agent_behavior == "gamma" and partner_behavior == "beta") or \
-            (agent_behavior == "delta" and partner_behavior == "delta")
-        ):
-            simulation_df.loc[idx, (agent, "current_partner")] = "unpartnered"
-            simulation_df.loc[idx, (current_partner, "current_partner")] = "unpartnered"
+        if idx[2] != MODEL_PARAMS['game_rounds'] - 1:
+            simulation_df.loc[next_idx, pd.IndexSlice[agent, :]] = simulation_df.loc[idx, pd.IndexSlice[agent, :]]
+            simulation_df.loc[next_idx, pd.IndexSlice[current_partner, :]] = simulation_df.loc[idx, pd.IndexSlice[current_partner, :]]
+            if not (
+                (agent_behavior == "alpha" and partner_behavior == "alpha") or \
+                (agent_behavior == "beta" and partner_behavior == "gamma") or \
+                (agent_behavior == "gamma" and partner_behavior == "beta") or \
+                (agent_behavior == "delta" and partner_behavior == "delta")
+            ):
+                simulation_df.loc[next_idx, (agent, "current_partner")] = "unpartnered"
+                simulation_df.loc[next_idx, (current_partner, "current_partner")] = "unpartnered"
 
 def update_behavior(simulation_df, generation, learning_step):
     idx = (generation, learning_step, MODEL_PARAMS['game_rounds'] - 1)
@@ -173,7 +179,7 @@ def update_externalization(simulation_df, generation):
         for i in range(pop_size)
     ]
     ranking.sort(reverse=True, key=lambda x: x[0])
-    top_half_ext = sum([i[1] for i in ranking[0:len(ranking)/2]])
+    top_half_ext = sum([i[1] for i in ranking[0:int(len(ranking)/2)]])
     new_ext = top_half_ext*2
     simulation_df.loc[next_idx] = new_generation(new_ext, pop_size)
 
@@ -183,7 +189,7 @@ def run_simulation():
 
     # natural selection
     for generation in range(MODEL_PARAMS['generations']):
-        print(str(generation)+" of "+str(MODEL_PARAMS['generations']))
+        print(f"Generation {generation+1} of {MODEL_PARAMS['generations']}")
         # learning process
         for learning_step in range(MODEL_PARAMS['learning_steps']):
 
@@ -193,7 +199,6 @@ def run_simulation():
                 play_game(simulation_df, generation, learning_step, game_round)
 
             # learning of new interaction and partner search behavior
-            ### AT SOME POINT NAN VALUES OCCUR - SET BREAK POINT AND DEBUG UPDATE BEHAVIOR
             update_behavior(simulation_df, generation, learning_step)
 
         # reproduction, that is update of externalization trait
@@ -201,14 +206,21 @@ def run_simulation():
     return simulation_df
 
 if __name__ == "__main__":
-    results_df = pd.DataFrame()
+    number_simulations = 3
+
+    print(f"Simulation run: 1 of {number_simulations}")
+    results_df = run_simulation()
+    results_df = results_df.reset_index()
+    results_df["simulation_number"] = 0
     results_df = results_df.set_index(["simulation_number", "generation", "learning_step", "game_round"])
-    for i in range(1000):
-        print("Simulation run: " + str(i))
+
+    for i in range(1, number_simulations):
+        print(f"Simulation run: {str(i+1)} of {number_simulations}")
         simulation_df = run_simulation()
         simulation_df["simulation_number"] = i
         simulation_df = simulation_df.reset_index()
         simulation_df = simulation_df.set_index(["simulation_number", "generation", "learning_step", "game_round"])
         results_df = pd.concat([results_df, simulation_df], axis=0)
+
     file_dir = os.path.dirname(os.path.realpath(__file__))
     results_df.to_csv(file_dir + "/../data/ABM_base_simulation.csv")
