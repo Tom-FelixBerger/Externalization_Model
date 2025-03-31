@@ -13,7 +13,7 @@ MODEL_PARAMS = {
     'game_rounds': 15,              # number of game rounds
     'pop_size': 100,                # population size
     'initial_externalizers': 1,     # initial share of externalizers
-    'generations': 3              # number of generations
+    'generations': 50              # number of generations
 }
 
 def new_generation(ext, pop_size):
