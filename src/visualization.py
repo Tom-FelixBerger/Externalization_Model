@@ -5,7 +5,8 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
 from matplotlib.lines import Line2D
 import os
-from model import initialize_dataframe
+import model_1
+import model_2
 
 plt.rcParams.update({
     'font.size': 16,  # Base font size
@@ -39,7 +40,7 @@ def read_data(csvpath="/../data/base_model_simulation.csv"):
         if col != "metric":
             df[col] = pd.to_numeric(df[col])
     df.set_index(index_colnames, inplace=True)
-    df.columns = initialize_dataframe().columns
+    df.columns = model_1.initialize_dataframe().columns
 
     return df
 

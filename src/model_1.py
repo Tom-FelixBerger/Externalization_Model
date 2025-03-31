@@ -8,10 +8,10 @@ MODEL_PARAMS = {
     'cd': 0,                        # payoff for c vs. d ("sucker")
     'dd': 1,                        # payoff for d vs. d ("punishment")
     'replication_k': 10,            # selection strength
-    'learning_steps': 2,           # number of learning steps
-    'game_rounds': 15,               # number of game rounds
+    'learning_steps': 15,           # number of learning steps
+    'game_rounds': 15,              # number of game rounds
     'initial_externalizers': 0.01,  # initial share of externalizers
-    'generations': 100               # number of generations
+    'generations': 100              # number of generations
 }
 
 BEHAVIORS = {
@@ -254,4 +254,4 @@ def run_simulation():
 if __name__ == "__main__":
     simulation_df = run_simulation()
     file_dir = os.path.dirname(os.path.realpath(__file__))
-    simulation_df.to_csv(file_dir + "/../data/lst_2_simulation.csv")
+    simulation_df.to_csv(file_dir + "/../data/base_model_simulation.csv")
