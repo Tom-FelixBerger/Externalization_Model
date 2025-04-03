@@ -55,34 +55,13 @@ def visualize_robustness(filename):
     df = read_data(csvpath="/../data/"+filename)
     
     max_gen = int(df.reset_index()["generation"].max())
-    gen_ext_dict = {i: [] for i in range(max_gen+1)}
-    gen_non_ext_dict = {i: [] for i in range(max_gen+1)}
-    natural_selection_df = pd.DataFrame(columns=["generation", "ext_trait", "mean", "97.5", "2.5"])
-
     max_sim = int(df.reset_index()["simulation"].max())
+    final_ext = []
 
     for simulation in range(max_sim+1):
         max_gen_in_sim = int(df.loc[pd.IndexSlice[simulation, :, :]].reset_index()["generation"].max())
-        for generation in range(max_gen_in_sim+1):
-            number_ext = df.loc[(simulation, generation, 0), pd.IndexSlice[:, "externalization"]].sum()
-            gen_ext_dict[generation].append(number_ext)
-            gen_non_ext_dict[generation].append(len(df.columns)/2 - number_ext)
-    
-    for generation in range(max_gen+1):
-        natural_selection_df.loc[len(natural_selection_df)] = [
-            generation,
-            "externalizers",
-            pd.Series(gen_ext_dict[generation]).mean(),
-            pd.Series(gen_ext_dict[generation]).quantile(0.975),
-            pd.Series(gen_ext_dict[generation]).quantile(0.025)
-        ]
-        natural_selection_df.loc[len(natural_selection_df)] = [
-            generation,
-            "non-externalizers",
-            pd.Series(gen_non_ext_dict[generation]).mean(),
-            pd.Series(gen_non_ext_dict[generation]).quantile(0.975),
-            pd.Series(gen_non_ext_dict[generation]).quantile(0.025)
-        ]
+        number_ext = df.loc[(simulation, max_gen_in_sim, 0), pd.IndexSlice[:, "externalization"]].sum()
+        final_ext.append(number_ext)
 
     max_lst = int(df.reset_index()["learning_step"].max())
     learning_process_df = pd.DataFrame(columns=["learning_step", "behavior", "mean", "97.5", "2.5"])
@@ -98,26 +77,13 @@ def visualize_robustness(filename):
                     learning_step, key, pd.Series(list_dict[key]).mean(), pd.Series(list_dict[key]).quantile(0.975), pd.Series(list_dict[key]).quantile(0.025)
                 ]
 
-    result_ext_df = pd.DataFrame(columns=["simulation", "externalizers"])
-    for simulation in range(max_sim+1):
-        max_gen = int(df.loc[pd.IndexSlice[simulation, :, :]].reset_index()["generation"].max())
-        result_ext_df.loc[len(result_ext_df)] = [
-            simulation, df.loc[(simulation, max_gen, 0), pd.IndexSlice[:, "externalization"]].sum()
-        ]
-
-
     sns.set_style("whitegrid")
     
-    # fig, axes = plt.subplots(1, 3, figsize=(12, 5))
     fig, axes = plt.subplots(1, 2, figsize=(8.5, 5))
     axes = axes.flatten()
 
     axes[0].set_ylabel("Number of Agents")
     axes[0].set_xlabel("Learning Step of First Generation")
-    # axes[1].set_ylabel("Number of Agents")
-    # axes[1].set_xlabel("Generation")
-    # axes[2].set_ylabel("Number of Simulations")
-    # axes[2].set_xlabel("Final Externalizers")
     axes[1].set_ylabel("Number of Simulations")
     axes[1].set_xlabel("Final Externalizers")
 
@@ -127,14 +93,7 @@ def visualize_robustness(filename):
                         linestyle='--', palette=COLOR_DICT, markeredgewidth=0, ax=axes[0])
     sns.lineplot(data=learning_process_df, x="learning_step", y="2.5", hue="behavior",
                         linestyle='--', palette=COLOR_DICT, markeredgewidth=0, ax=axes[0])
-    # sns.lineplot(data=natural_selection_df, x="generation", y="mean", hue="ext_trait", 
-    #                     marker='o', palette=COLOR_DICT, markeredgewidth=0, ax=axes[1])
-    # sns.lineplot(data=natural_selection_df, x="generation", y="97.5", hue="ext_trait",
-    #                     linestyle='--', palette=COLOR_DICT, markeredgewidth=0, ax=axes[1])
-    # sns.lineplot(data=natural_selection_df, x="generation", y="2.5", hue="ext_trait",
-    #                     linestyle='--', palette=COLOR_DICT, markeredgewidth=0, ax=axes[1])
-    # sns.histplot(data=result_ext_df, x="externalizers", stat="count", bins=20, ax=axes[2], color="gray", kde=True)
-    sns.histplot(data=result_ext_df, x="externalizers", stat="count", bins=20, ax=axes[1], color="gray", kde=True)
+    sns.histplot(x=pd.Series(final_ext), stat="count", bins=20, ax=axes[1], color="gray", kde=True)
 
     # Remove legends from individual plots
     for ax in axes:
@@ -145,25 +104,23 @@ def visualize_robustness(filename):
     handles = []
     for behavior in behaviors:
         # Line marker for line plots
-        line = Line2D([0], [0], color=COLOR_DICT[behavior], marker='o', linestyle='-', linewidth=2, markersize=6)
+        line1 = Line2D([0], [0], color=COLOR_DICT[behavior], marker='o', linestyle='-', linewidth=2, markersize=6)
+        line2 = Line2D([0], [0], color=COLOR_DICT[behavior], marker=None, linestyle='--', linewidth=2, markersize=6)
 
-        handles.append((line, behavior))
-    
-    for ext_trait in ["externalizers", "non-externalizers"]:
-        line = Line2D([0], [0], color=COLOR_DICT[ext_trait], marker='o', linestyle='-', linewidth=2, markersize=6)
-        handles.append((line, ext_trait))
+        handles.append((line1, f"{behavior} (mean)"))
+        handles.append((line2, f"{behavior} (95% CI)"))
 
     # Combine them into a single legend
     fig.legend(
         handles=[h[0] for h in handles], 
         labels=[h[1] for h in handles],
-        ncol=3,
+        ncol=2,
         # bbox_to_anchor=(0.6, 0.2)
-        bbox_to_anchor=(0.8, 0.2)
+        bbox_to_anchor=(0.7, 0.3)
     )
 
     fig.tight_layout(pad=3.0)
-    plt.subplots_adjust(bottom=0.3)
+    plt.subplots_adjust(bottom=0.4)
 
     return fig
 
