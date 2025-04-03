@@ -8,12 +8,12 @@ MODEL_PARAMS = {
     'dc': 3,                        # payoff for d vs. c ("temptation")
     'cd': 0,                        # payoff for c vs. d ("sucker")
     'dd': 1,                        # payoff for d vs. d ("punishment")
-    'learning_steps': 15,           # number of learning steps
+    'learning_steps': 15,            # number of learning steps
     "learning_mechanism": "success",# success-, frequency-, or source-based
-    'game_rounds': 15,              # number of game rounds
-    'pop_size': 100,                # population size
+    'game_rounds': 15,               # number of game rounds
+    'pop_size': 100,                  # population size
     'initial_externalizers': 1,     # initial share of externalizers
-    'generations': 50              # number of generations
+    'generations': 50               # number of generations
 }
 
 def new_generation(ext, pop_size):
@@ -182,14 +182,19 @@ def update_externalization(simulation_df, generation):
     top_half_ext = sum([i[1] for i in ranking[0:int(len(ranking)/2)]])
     new_ext = top_half_ext*2
     simulation_df.loc[next_idx] = new_generation(new_ext, pop_size)
+    
+    converged = ((simulation_df.loc[next_idx, pd.IndexSlice[:, "externalization"]].sum() == pop_size) or
+                (simulation_df.loc[next_idx, pd.IndexSlice[:, "externalization"]].sum() == 0))
+    return converged
 
 # Run the simulation and export data
-def run_simulation():
+def run_simulation(simulation_number):
     simulation_df = initialize_dataframe()
 
     # natural selection
     for generation in range(MODEL_PARAMS['generations']):
-        print(f"Generation {generation+1} of {MODEL_PARAMS['generations']}")
+        if generation%10 == 0:
+            print(f"Generation {generation+1} of {MODEL_PARAMS['generations']}")
         # learning process
         for learning_step in range(MODEL_PARAMS['learning_steps']):
 
@@ -202,25 +207,39 @@ def run_simulation():
             update_behavior(simulation_df, generation, learning_step)
 
         # reproduction, that is update of externalization trait
-        update_externalization(simulation_df, generation)
-    return simulation_df
+        converged = update_externalization(simulation_df, generation)
+        if converged:
+            break
+    
+    # transform the simulation dataframe for saving of results
+    results_df = simulation_df.copy()
+    results_df = results_df.reset_index()
+    results_df["simulation_number"] = simulation_number
+    results_df = results_df.set_index(["simulation_number", "generation", "learning_step"])
+    
+    # drop all irrelevant columns and rows for space reasons
+    results_df = results_df[results_df["game_round"] == 0]
+    results_df = results_df.loc[
+        # Either: generation 0 AND learning step between 0-14
+        ((results_df.index.get_level_values('generation') == 0) & 
+        (results_df.index.get_level_values('learning_step') < MODEL_PARAMS['learning_steps'])) |
+        # Or: generation > 0 AND learning step = 0
+        ((results_df.index.get_level_values('generation') > 0) & 
+        (results_df.index.get_level_values('learning_step') == 0))
+    ]
+    results_df = results_df.drop(columns=["game_round"], level=0)
+    results_df = results_df.drop(columns=[c for c in results_df.columns if not c[1] in ["externalization", "behavior"]])
+
+    return results_df
 
 if __name__ == "__main__":
-    number_simulations = 3
+    number_simulations = 100
 
-    print(f"Simulation run: 1 of {number_simulations}")
-    results_df = run_simulation()
-    results_df = results_df.reset_index()
-    results_df["simulation_number"] = 0
-    results_df = results_df.set_index(["simulation_number", "generation", "learning_step", "game_round"])
-
+    print(f"Running simulation 1 of {number_simulations}")
+    results_df = run_simulation(0)
     for i in range(1, number_simulations):
-        print(f"Simulation run: {str(i+1)} of {number_simulations}")
-        simulation_df = run_simulation()
-        simulation_df["simulation_number"] = i
-        simulation_df = simulation_df.reset_index()
-        simulation_df = simulation_df.set_index(["simulation_number", "generation", "learning_step", "game_round"])
-        results_df = pd.concat([results_df, simulation_df], axis=0)
+        print(f"Running simulation {i+1} of {number_simulations}")
+        results_df = pd.concat([results_df, run_simulation(i)], axis=0)
 
     file_dir = os.path.dirname(os.path.realpath(__file__))
     results_df.to_csv(file_dir + "/../data/ABM_base_simulation.csv")
