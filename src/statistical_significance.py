@@ -13,6 +13,19 @@ COLOR_DICT = {
     "non-externalizers": "purple"
 }
 
+def simulate_benchmark(sample_size, pop_size):
+    results = []
+    for i in range(sample_size):
+        population = [1]+[0]*(pop_size-1)
+        np.random.shuffle(population)
+        for gen in range(50):
+            population = population[:int(pop_size/2)]*2
+            np.random.shuffle(population)
+            if sum(population) == 0 or sum(population) == pop_size:
+                break
+        results.append(sum(population))
+    return results
+
 def read_data(csvpath="/../data/ABM_base_simulation.csv"):
     # Read the file
     file_dir = os.path.dirname(os.path.realpath(__file__))
@@ -39,7 +52,7 @@ def read_data(csvpath="/../data/ABM_base_simulation.csv"):
 
     return df
 
-def test_for_significance(filename):
+def test_for_significance(filename, pop_size):
     df = read_data(csvpath="/../data/"+filename)
     
     max_sim = int(df.reset_index()["simulation"].max())
@@ -49,22 +62,28 @@ def test_for_significance(filename):
         max_gen_in_sim = int(df.loc[pd.IndexSlice[simulation, :, :]].reset_index()["generation"].max())
         number_ext = df.loc[(simulation, max_gen_in_sim, 0), pd.IndexSlice[:, "externalization"]].sum()
         simulation_results.append(int(number_ext))
+    export_txt = f"Simulation results: {simulation_results}\n"
 
 
-    print("Simulation results:", simulation_results)
-    benchmark = [0]*96+[3,14,26,42]
-    print("Benchmark results:", benchmark)
+    benchmark = simulate_benchmark(sample_size=1000, pop_size=pop_size)
+    export_txt += f"Benchmark results: {benchmark}\n"
+    export_txt += f"Mean of benchmark results: {np.mean(benchmark)}\n"
+    export_txt += f"Number of 0 in benchmark results: {np.sum(np.array(benchmark) == 0)}\n"
+    export_txt += f"Number of {pop_size} in benchmark results: {np.sum(np.array(benchmark) == 100)}\n"
 
     # One-sided Mann-Whitney U test to test if the simulation results are greater than the benchmark
     statistic, p_value = mannwhitneyu(simulation_results, benchmark, alternative='greater')
-
-    print("Mann-Whitney U statistic:", statistic)
-    print("p-value:", p_value)
-
-    
-
+    export_txt += f"Mann-Whitney U statistic: {statistic}, p-value: {p_value}\n"
+    return export_txt
 
 
 if __name__ == "__main__":
     file_dir = os.path.dirname(os.path.realpath(__file__))
-    test_for_significance("ABM_base_simulation.csv")
+    
+    export_txt = "Significance Test Results Base ABM:\n"
+    export_txt += test_for_significance("ABM_base_simulation.csv", pop_size=100)
+    export_txt += "\nSignificance Test Results Population Size 8 ABM:\n"
+    export_txt += test_for_significance("ABM_popsize_8_simulation.csv", pop_size=8)
+
+    with open(file_dir+"/../data/significance_test_results.txt", "w") as f:
+        f.write(export_txt)

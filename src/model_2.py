@@ -9,7 +9,7 @@ MODEL_PARAMS = {
     'cd': 0,                        # payoff for c vs. d ("sucker")
     'dd': 1,                        # payoff for d vs. d ("punishment")
     'learning_steps': 15,            # number of learning steps
-    "learning_mechanism": "success",# success-, frequency-, or source-based
+    "learning_mechanism": "mixed", # success-, frequency-, or source-based
     'game_rounds': 15,               # number of game rounds
     'pop_size': 100,                  # population size
     'initial_externalizers': 1,     # initial share of externalizers
@@ -128,30 +128,35 @@ def update_behavior(simulation_df, generation, learning_step):
         all_ranking.append((fitness, behavior))
         if behavior in ["alpha", "delta"]:
             ext_ranking.append((fitness, behavior))
+
+    learning_mechanism = MODEL_PARAMS["learning_mechanism"]
+    if learning_mechanism == "mixed":
+        learning_mechanism = choice(["success", "frequency", "source"])
         
     all_ranking.sort(reverse=True, key=lambda x: x[0])
-    if MODEL_PARAMS["learning_mechanism"] == "success":
+    if learning_mechanism == "success":
         all_probab = [len(all_ranking) - i for i in range(len(all_ranking))]
         all_probab = [i / sum(all_probab) for i in all_probab]
-    elif MODEL_PARAMS["learning_mechanism"] == "frequency":
+    elif learning_mechanism == "frequency":
         all_probab = [1 / len(all_ranking) for _ in range(len(all_ranking))]
-    elif MODEL_PARAMS["learning_mechanism"] == "source":
+    elif learning_mechanism == "source":
         all_probab = [0] * len(all_ranking)
         for sources in sample(range(len(all_ranking)), 4):
             all_probab[sources] = 1/4
     
+    ext_probab = [0] * len(ext_ranking)
     if ext_ranking:
         ext_ranking.sort(reverse=True, key=lambda x: x[0])
-        if MODEL_PARAMS["learning_mechanism"] == "success":
+        if learning_mechanism == "success":
             ext_probab = [len(ext_ranking) - i for i in range(len(ext_ranking))]
             ext_probab = [i / sum(ext_probab) for i in ext_probab]
-        elif MODEL_PARAMS["learning_mechanism"] == "frequency":
+        elif learning_mechanism == "frequency":
             ext_probab = [1 / len(ext_ranking) for _ in range(len(ext_ranking))]
-        elif MODEL_PARAMS["learning_mechanism"] == "source":
+        elif learning_mechanism == "source":
             ext_probab = [0] * len(ext_ranking)
             no_sources = min(len(ext_ranking), 4)
-            for sources in sample(range(len(ext_ranking)), no_sources):
-                ext_probab[sources] = 1/no_sources
+            for source in sample(range(len(ext_ranking)), no_sources):
+                ext_probab[source] = 1/no_sources
     
     for agent in range(MODEL_PARAMS["pop_size"]):
         if simulation_df.loc[idx, (agent, "externalization")] == 1:
@@ -242,4 +247,4 @@ if __name__ == "__main__":
         results_df = pd.concat([results_df, run_simulation(i)], axis=0)
 
     file_dir = os.path.dirname(os.path.realpath(__file__))
-    results_df.to_csv(file_dir + "/../data/ABM_base_simulation.csv")
+    results_df.to_csv(file_dir + "/../data/ABM_mixed_learning_mechanism_simulation.csv")

@@ -131,3 +131,6 @@ if __name__ == "__main__":
 
     fig9 = visualize_robustness("ABM_base_simulation.csv")
     fig9.savefig(file_dir+"/../plots/fig9.png")
+
+    fig10 = visualize_robustness("ABM_popsize_8_simulation.csv")
+    fig9.savefig(file_dir+"/../plots/fig10.png")
